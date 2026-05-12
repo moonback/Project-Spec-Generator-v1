@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Mail, Lock, Loader2 } from 'lucide-react';
+import { Star, Mail, Lock, Loader2 } from 'lucide-react';
 
 type Tab = 'login' | 'register' | 'magic';
 
@@ -79,18 +79,28 @@ export default function AuthGate({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-slate-100 flex flex-col items-center justify-center p-6">
-      <div className="flex items-center gap-2 mb-10">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-          <Sparkles className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-[var(--app-bg)] text-slate-900">
+      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md print:hidden">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563eb] text-white shadow-sm shadow-blue-600/20 ring-1 ring-blue-500/25">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15">
+                <Star className="h-3.5 w-3.5 fill-white text-white" strokeWidth={2} aria-hidden />
+              </span>
+            </span>
+            <div>
+              <p className="text-sm font-bold tracking-tight text-[#0c1a3a]">AI Product Architect</p>
+              <p className="text-xs text-slate-500">Connexion sécurisée</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">AI Product Architect</h1>
-          <p className="text-sm text-slate-400">Connexion requise pour utiliser le générateur</p>
-        </div>
-      </div>
+      </header>
 
-      <div className="w-full max-w-md bg-white/95 text-slate-900 rounded-2xl shadow-2xl border border-white/20 p-8 space-y-6">
+      <div className="mx-auto flex w-full max-w-md flex-col items-stretch px-6 pb-16 pt-8 sm:pt-12">
+        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight text-[#0c1a3a]">
+          Accédez au générateur
+        </h1>
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-8 text-slate-900 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.2)] space-y-6">
         <div className="flex rounded-lg bg-slate-100 p-1 text-sm font-medium">
           {(['login', 'register', 'magic'] as const).map((t) => (
             <button
@@ -262,12 +272,13 @@ export default function AuthGate({
             </button>
           </form>
         )}
-      </div>
+        </div>
 
-      <p className="mt-8 text-center text-xs text-slate-500 max-w-sm">
-        Dans le tableau Supabase : Authentication → Providers → activez « Email » et « Confirm email » selon votre
-        choix. La connexion par mot de passe nécessite que l’option Email soit activée.
-      </p>
+        <p className="mt-8 text-center text-xs leading-relaxed text-slate-500">
+          Dans le tableau Supabase : Authentication → Providers → activez « Email » et « Confirm email » selon votre
+          choix. La connexion par mot de passe nécessite que l’option Email soit activée.
+        </p>
+      </div>
     </div>
   );
 }

@@ -14,10 +14,11 @@ interface HistoryPanelProps {
 }
 
 export default function HistoryPanel({ history, onLoadItem, hasCloudSync }: HistoryPanelProps) {
-  if (history.length === 0) return null;
-
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 print:hidden">
+    <div
+      id="historique"
+      className="scroll-mt-24 bg-white rounded-2xl border border-slate-200/90 p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] print:hidden"
+    >
       <div className="flex items-center gap-2 mb-4">
         <Clock className="w-5 h-5 text-slate-600" />
         <h3 className="text-sm font-bold uppercase tracking-tight text-slate-900">
@@ -27,6 +28,13 @@ export default function HistoryPanel({ history, onLoadItem, hasCloudSync }: Hist
           <Cloud className="w-4 h-4 text-emerald-500 ml-auto" aria-label="Synchronisé dans le cloud" />
         )}
       </div>
+
+      {history.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-sm text-slate-600 leading-relaxed">
+          Aucune spec enregistrée pour l’instant. Générez un premier cahier des charges : il apparaîtra ici et sera
+          synchronisé avec le cloud si vous êtes connecté.
+        </p>
+      ) : null}
 
       <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
         {history.map((item) => (

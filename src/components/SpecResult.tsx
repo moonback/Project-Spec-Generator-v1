@@ -33,7 +33,7 @@ export default function SpecResult({
   if (!spec && !isLoading) return null;
 
   return (
-    <div ref={resultRef} className="pt-8 print:pt-0">
+    <div ref={resultRef} id="resultat-spec" className="scroll-mt-24 pt-8 print:pt-0">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 print:hidden">
         <div className="flex items-center gap-3">

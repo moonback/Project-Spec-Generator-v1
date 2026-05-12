@@ -187,6 +187,29 @@ export default function App() {
       return;
     }
 
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (error) {
+          console.error('getSession:', error);
+        }
+        const session = data.session;
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          const merged = await hydrateHistoryFromCloud(session.user.id);
+          if (cancelled) return;
+          if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
+        }
+      } catch (e) {
+        console.error('Session init failed', e);
+      } finally {
+        if (!cancelled) setAuthChecked(true);
+      }
+    })();
+
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -195,15 +218,11 @@ export default function App() {
       if (event === 'SIGNED_OUT') {
         setHistory([]);
         writeHistoryToStorage([]);
+        return;
       }
 
-      if (event === 'INITIAL_SESSION') {
-        setAuthChecked(true);
-        if (session?.user) {
-          const merged = await hydrateHistoryFromCloud(session.user.id);
-          if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
-        }
-      }
+      // INITIAL_SESSION : l’état initial est déjà appliqué via getSession() ci-dessus.
+      if (event === 'INITIAL_SESSION') return;
 
       if (event === 'SIGNED_IN' && session?.user) {
         const merged = await hydrateHistoryFromCloud(session.user.id);
@@ -211,7 +230,10 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [hydrateHistoryFromCloud, syncAllHistoryToCloud]);
 
   const handleSignInPassword = async (email: string, password: string) => {
@@ -423,7 +445,7 @@ USER INPUT: "${idea}"`;
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-8">
         <div className="flex flex-col items-center gap-3 text-slate-600">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm font-medium">Vérification de la session…</p>
@@ -444,16 +466,33 @@ USER INPUT: "${idea}"`;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 text-slate-900 font-sans p-4 md:p-8 print:p-0 print:bg-white">
-      <div className="max-w-6xl mx-auto space-y-8 print:space-y-0">
-        <Header
-          user={user}
-          historyCount={history.length}
-          onShowHistory={() => setShowHistory(!showHistory)}
-          onSignOut={handleSignOut}
-          hasCloudSync
-          isSyncing={isSyncing}
-        />
+    <div
+      id="top"
+      className="min-h-screen bg-[var(--app-bg)] text-slate-900 font-sans print:bg-white print:p-0"
+    >
+      <Header
+        user={user}
+        historyCount={history.length}
+        onOpenHistory={() => setShowHistory(true)}
+        onSignOut={handleSignOut}
+        hasCloudSync
+        isSyncing={isSyncing}
+        hasSpec={Boolean(spec.trim()) || isLoading}
+      />
+
+      <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8 print:space-y-0 print:px-0 print:py-0">
+        <header className="print:hidden">
+          <h1 className="text-3xl font-bold tracking-tight text-[#0c1a3a] sm:text-4xl md:text-[2.35rem] md:leading-tight">
+            Tech Spec{' '}
+            <span className="bg-gradient-to-r from-[#2563eb] to-[#4f46e5] bg-clip-text text-transparent">
+              Generator
+            </span>
+          </h1>
+          <p className="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+            Transformez une simple idée en un document d&apos;architecture technique complet et détaillé, prêt à
+            être confié à une équipe de développement.
+          </p>
+        </header>
 
         {showHistory && (
           <HistoryPanel
@@ -463,8 +502,11 @@ USER INPUT: "${idea}"`;
           />
         )}
 
-        <div className="grid lg:grid-cols-[1fr,340px] gap-8 items-start print:hidden">
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 space-y-6">
+        <div className="grid items-start gap-8 lg:grid-cols-[1fr,340px] print:hidden">
+          <div
+            id="generateur"
+            className="scroll-mt-24 space-y-6 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] sm:p-8"
+          >
             <IdeaInput
               value={idea}
               onChange={setIdea}
@@ -512,7 +554,7 @@ USER INPUT: "${idea}"`;
         />
 
         <ToastHost toasts={toasts} onDismiss={dismissToast} />
-      </div>
+      </main>
     </div>
   );
 }

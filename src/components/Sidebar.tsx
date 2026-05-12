@@ -2,7 +2,7 @@ import { FileText, Blocks, Layout, Zap } from 'lucide-react';
 
 export default function Sidebar() {
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6 sticky top-8">
+    <div className="sticky top-24 space-y-6 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50/90 to-white p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.1)]">
       <div className="flex items-center gap-2 mb-4">
         <Zap className="w-5 h-5 text-amber-500" />
         <h3 className="text-sm font-bold uppercase tracking-tight text-slate-900">
