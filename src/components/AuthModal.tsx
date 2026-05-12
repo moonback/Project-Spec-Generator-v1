@@ -3,17 +3,18 @@ import { X, Mail } from 'lucide-react';
 
 interface AuthModalProps {
   onClose: () => void;
-  onSignIn: (email: string) => Promise<void>;
+  onSignIn: (email: string, profileName: string) => Promise<void>;
   isSyncing: boolean;
 }
 
 export default function AuthModal({ onClose, onSignIn, isSyncing }: AuthModalProps) {
   const [email, setEmail] = useState('');
+  const [profileName, setProfileName] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
-    await onSignIn(email);
+    await onSignIn(email, profileName);
   };
 
   return (
@@ -32,8 +33,8 @@ export default function AuthModal({ onClose, onSignIn, isSyncing }: AuthModalPro
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Connexion Cloud</h3>
-              <p className="text-sm text-slate-500">Synchronisez vos projets</p>
+              <h3 className="text-lg font-bold text-slate-900">Inscription & Connexion Cloud</h3>
+              <p className="text-sm text-slate-500">Créez votre compte et synchronisez vos projets</p>
             </div>
           </div>
 
@@ -42,6 +43,20 @@ export default function AuthModal({ onClose, onSignIn, isSyncing }: AuthModalPro
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="profileName" className="block text-sm font-medium text-slate-700 mb-2">
+                Nom du profil
+              </label>
+              <input
+                id="profileName"
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="Ex: Sarah Product"
+                className="w-full px-4 py-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                disabled={isSyncing}
+              />
+            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                 Adresse email

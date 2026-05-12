@@ -16,6 +16,8 @@ interface HistoryItem {
   idea: string;
   spec: string;
   timestamp: number;
+  language: string;
+  sections: string[];
 }
 
 const PRESETS = [
@@ -72,12 +74,18 @@ export default function App() {
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         setUser(session?.user ?? null);
-        if (session?.user) fetchCloudHistory(session.user.id);
+        if (session?.user) {
+          syncAllHistoryToCloud(session.user.id, history);
+          fetchCloudHistory(session.user.id);
+        }
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
-        if (session?.user) fetchCloudHistory(session.user.id);
+        if (session?.user) {
+          syncAllHistoryToCloud(session.user.id, history);
+          fetchCloudHistory(session.user.id);
+        }
       });
 
       return () => subscription.unsubscribe();
@@ -98,11 +106,37 @@ export default function App() {
           id: d.id,
           idea: d.idea,
           spec: d.spec,
-          timestamp: new Date(d.timestamp).getTime()
+          timestamp: new Date(d.timestamp).getTime(),
+          language: d.language || 'fr',
+          sections: d.sections || SECTIONS.map((section) => section.id)
         })));
       }
     } catch (err) {
       console.error('Failed to fetch cloud history', err);
+    }
+  };
+
+  const syncAllHistoryToCloud = async (userId: string, items: HistoryItem[]) => {
+    if (!supabase || !items.length) return;
+
+    try {
+      setIsSyncing(true);
+      const payload = items.map((item) => ({
+        id: item.id,
+        user_id: userId,
+        idea: item.idea,
+        spec: item.spec,
+        timestamp: new Date(item.timestamp).toISOString(),
+        language: item.language,
+        sections: item.sections
+      }));
+
+      const { error } = await supabase.from('projects').upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to sync all history to cloud', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -115,7 +149,9 @@ export default function App() {
         user_id: user.id,
         idea: item.idea,
         spec: item.spec,
-        timestamp: new Date(item.timestamp).toISOString()
+        timestamp: new Date(item.timestamp).toISOString(),
+        language: item.language,
+        sections: item.sections
       }, { onConflict: 'id' });
     } catch (err) {
       console.error('Failed to sync to cloud', err);
@@ -124,12 +160,24 @@ export default function App() {
     }
   };
 
-  const handleSignIn = async (email: string) => {
+  const upsertProfile = async (email: string, profileName: string) => {
+    if (!supabase || !email.trim()) return;
+
+    const displayName = profileName.trim() || email.split('@')[0];
+    await supabase.from('profiles').upsert({
+      email,
+      display_name: displayName,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'email' });
+  };
+
+  const handleSignIn = async (email: string, profileName: string) => {
     if (!supabase || !email.trim()) return;
     try {
       setIsSyncing(true);
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
+      await upsertProfile(email, profileName);
       alert('Lien de connexion envoyé ! Vérifiez vos emails.');
     } catch (error: any) {
       alert(error.message || 'Erreur lors de la connexion');
@@ -154,7 +202,9 @@ export default function App() {
           id: crypto.randomUUID(),
           idea,
           spec,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          language,
+          sections: includedSections
         };
         const newHistory = [newItem, ...prev].slice(0, 10);
         localStorage.setItem('architect-ai-history', JSON.stringify(newHistory));
