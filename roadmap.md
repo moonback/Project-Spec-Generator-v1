@@ -1,31 +1,32 @@
-# 🗺️ ArchitectAI Development Roadmap
+# 🗺️ ArchitectAI Development Roadmap (Updated: May 12, 2026)
 
-This document outlines the planned development phases for ArchitectAI, moving from the current MVP to a fully featured SaaS product.
+## Phase 1: MVP ✅
+- [x] UI React + Vite + Tailwind.
+- [x] Génération de specs multi-sections en Markdown.
+- [x] Export Markdown / impression PDF.
 
-## Phase 1: MVP (Completed) ✅
-- [x] Basic React boilerplate setup with Vite and Tailwind CSS.
-- [x] Integration with Google Gemini SDK (`@google/genai`).
-- [x] Formulate a robust AI system prompt for tech spec generation.
-- [x] Read-only UI rendering of generated markdown using `react-markdown`.
-- [x] "Clean Minimalism" aesthetic implementation.
-- [x] Included "Technical Risks & Mitigation Strategies" in the AI output.
+## Phase 2: Product Reliability ✅
+- [x] Historique local (localStorage).
+- [x] Presets d'idées de projet.
+- [x] Support multilingue (FR/EN/ES).
+- [x] Personnalisation des sections générées.
+- [x] Remplacement Gemini par OpenRouter avec `openai/gpt-oss-120b:free`.
+- [x] Messages d’erreurs API plus détaillés.
 
-## Phase 2: User Experience & Core Enhancements (Next) ✅
-- [x] **Export Functionality**: Allow users to download the generated specification as a `.md` (Markdown) or `.pdf` file.
-- [x] **Copy to Clipboard**: A quick copy button for the generated output text.
-- [x] **Local History**: Save previous generated specs in the browser's `localStorage` so users don't lose their work if they refresh.
-- [x] **Preset Prompts**: Add quick-select templates (e.g., "E-commerce SaaS B2B", "Application mobile de livraison", "Dashboard interne BI") to help users get started quickly.
-- [x] **Loading Skeletons**: Improve the loading state with structured text skeletons instead of just a spinner.
+## Phase 3: Collaboration & Scale 🚀
+- [ ] Authentification robuste + gestion de session améliorée.
+- [ ] Espace « projets » (CRUD complet des specs).
+- [ ] Versioning des specs et comparaison des itérations.
+- [ ] Génération assistée de backlog (epics/stories/tasks) depuis la spec.
+- [ ] Génération de diagrammes (Mermaid) intégrée dans le rendu.
 
-## Phase 3: Advanced Features & Scale 🚀
-- [ ] **Authentication**: Implement user login (via Supabase) to save projects in the cloud.
-- [ ] **Project Management**: A dashboard to manage multiple saved project specifications.
-- [ ] **Code Generation**: Use the generated specification as context to automatically bootstrap the initial codebase (Next.js/Node templates).
-- [ ] **Diagram Generation**: Instruct the AI to generate Mermaid.js code for Database Schemas and System Architectures, and render them visually.
-- [x] **Multi-language Support**: Allow users to select the output language (English, French, Spanish, etc.) via a UI dropdown.
-- [x] **Customizable Blueprints**: Let the user customize the expected output structure (check/uncheck sections).
+## Phase 4: Integrations & Enterprise 🌟
+- [ ] Export Jira/Linear/Notion en 1 clic.
+- [ ] Templates de gouvernance (sécurité, conformité, SLA).
+- [ ] Branding avancé des exports PDF.
+- [ ] Collaboration temps réel et commentaires par section.
 
-## Phase 4: Enterprise & Collaboration 🌟
-- [ ] **Collaborative Editing**: Real-time multi-user editing of the generated spec after it has been created.
-- [ ] **Jira/Trello Integration**: One-click export of structured User Stories directly to project management tools.
-- [ ] **PDF Custom Branding**: Allow users to add their company logo to exported PDFs.
+## Phase 5: AI Workflow Automation 🧠
+- [ ] Mode « Architect Copilot »: amélioration guidée de specs existantes.
+- [ ] Suggestions automatiques de stack selon contraintes (coût, time-to-market, scalabilité).
+- [ ] Évaluation automatique des risques techniques + score de faisabilité.

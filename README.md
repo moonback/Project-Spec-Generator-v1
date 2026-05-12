@@ -1,59 +1,52 @@
 # ArchitectAI - Tech Spec Generator
 
-## 📌 Project Overview
-ArchitectAI is an AI-powered tool designed to transform a simple project idea into a complete, structured, and actionable technical specification. By leveraging the Google Gemini API, it simulates the expertise of a Senior Product Manager, Software Architect, and Tech Lead to provide a robust blueprint for any software project.
+## 📌 Vue d'ensemble
+ArchitectAI transforme une idée produit en spécification technique exécutable (Markdown), prête à être utilisée par une équipe produit/tech. L’application utilise désormais **OpenRouter** avec le modèle **`openai/gpt-oss-120b:free`**.
 
-## ✨ Features
-- **AI-Powered Specifications**: Generates detailed technical specs from a simple user prompt.
-- **Comprehensive Structure**: Automatically formats the output into 11 critical sections including MVP features, system architecture, database schema, and potential technical risks.
-- **Markdown Support**: Renders the generated specification with clean, readable Markdown syntax.
-- **Clean Minimalism Aesthetic**: Provides a professional, distraction-free user interface.
+## ✨ Fonctionnalités
+- Génération de specs techniques détaillées depuis un simple brief.
+- Structure en sections activables/désactivables (MVP, architecture, API, risques, etc.).
+- Sélection de langue de sortie (FR/EN/ES).
+- Historique local (localStorage) + synchronisation cloud optionnelle (Supabase).
+- Export Markdown, impression PDF, copie rapide.
 
-## 🚀 Getting Started
+## 🚀 Démarrage
 
-### Prerequisites
-- Node.js (v18+)
-- npm or yarn
-- A Google Gemini API Key
+### Prérequis
+- Node.js 18+
+- npm
+- Une clé API OpenRouter
 
 ### Installation
-
-1. Clone the repository and install dependencies:
 ```bash
 npm install
 ```
 
-2. Set up environment variables:
-Configure your `.env` file based on `.env.example`. You will need to provide your Gemini API key:
+### Variables d'environnement
+Créez un fichier `.env` à la racine :
 ```env
-GEMINI_API_KEY="your_api_key_here"
+VITE_OPENROUTER_API_KEY="your_openrouter_api_key"
 ```
 
-3. Run the development server:
+> Optionnel (si vous utilisez l’auth + sync cloud) : variables Supabase selon votre config.
+
+### Lancer en développement
 ```bash
 npm run dev
 ```
 
-## 🛠️ Tech Stack
-- **Frontend**: React 19, TypeScript, Vite
-- **Styling**: Tailwind CSS v4
-- **AI Integration**: `@google/genai` (Gemini 3.1 Pro Preview)
-- **Markdown Render**: `react-markdown` and `remark-gfm`
-- **Icons**: `lucide-react`
+## 🛠️ Stack technique
+- React 19 + TypeScript + Vite
+- Tailwind CSS v4
+- OpenRouter Chat Completions API
+- Modèle: `openai/gpt-oss-120b:free`
+- `react-markdown` + `remark-gfm`
+- Supabase (auth / sauvegarde cloud, optionnel)
 
-## 🧠 Output Structure Generated
-The AI generates a specification with the following strict structure:
-1. 📌 Résumé du projet (Project Summary)
-2. 🎯 Objectifs business (Business Objectives)
-3. 🚀 MVP (Minimum Viable Product)
-4. 👤 User Stories
-5. 🧠 Architecture système (System Architecture)
-6. 🗄️ Modèle de données (Database Schema)
-7. 🔌 API (Endpoints)
-8. 🖥️ Pages UI nécessaires (UI Pages)
-9. 🛠️ Stack technique recommandée (Recommended Stack)
-10. 🗺️ Roadmap de développement (Development Roadmap)
-11. ⚠️ Risques techniques & Stratégies de mitigation (Technical Risks & Mitigation)
+## 🧠 Qualité de génération (améliorations)
+- Prompt renforcé pour produire du contenu actionnable (priorités P0/P1/P2, complexité S/M/L, hypothèses explicites).
+- Contrôle strict des sections sélectionnées.
+- Gestion d’erreurs API plus explicite pour faciliter le debug.
 
-## 📄 License
+## 📄 Licence
 SPDX-License-Identifier: Apache-2.0

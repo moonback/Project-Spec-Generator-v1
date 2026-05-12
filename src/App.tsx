@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { supabase } from './lib/supabase';
 import Header from './components/Header';
 import IdeaInput from './components/IdeaInput';
@@ -9,8 +8,8 @@ import HistoryPanel from './components/HistoryPanel';
 import Sidebar from './components/Sidebar';
 import SpecResult from './components/SpecResult';
 
-// Initialize the API using the injected environment variable
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+const OPENROUTER_MODEL = 'openai/gpt-oss-120b:free';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface HistoryItem {
   id: string;
@@ -50,13 +49,11 @@ export default function App() {
   const [spec, setSpec] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  // Customization State
+
   const [language, setLanguage] = useState('fr');
   const [includedSections, setIncludedSections] = useState<string[]>(SECTIONS.filter(s => s.default).map(s => s.id));
   const [showOptions, setShowOptions] = useState(false);
 
-  // History & Auth State
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       const saved = localStorage.getItem('architect-ai-history');
@@ -67,8 +64,7 @@ export default function App() {
   });
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
-  
-  // Supabase State
+
   const [user, setUser] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -96,7 +92,7 @@ export default function App() {
         .select('*')
         .eq('user_id', userId)
         .order('timestamp', { ascending: false });
-        
+
       if (!error && data) {
         setHistory(data.map(d => ({
           id: d.id,
@@ -148,11 +144,9 @@ export default function App() {
     }
   };
 
-  // Save to history when a spec is fully generated
   useEffect(() => {
     if (spec && !isLoading && spec.length > 100) {
       setHistory(prev => {
-        // Avoid duplicate saves for the same idea
         if (prev.length > 0 && prev[0].idea === idea && prev[0].spec === spec) {
           return prev;
         }
@@ -162,7 +156,7 @@ export default function App() {
           spec,
           timestamp: Date.now()
         };
-        const newHistory = [newItem, ...prev].slice(0, 10); // Keep last 10 locally
+        const newHistory = [newItem, ...prev].slice(0, 10);
         localStorage.setItem('architect-ai-history', JSON.stringify(newHistory));
         if (user) {
           syncToCloud(newItem);
@@ -173,7 +167,7 @@ export default function App() {
   }, [isLoading, spec, idea, user]);
 
   const toggleSection = (id: string) => {
-    setIncludedSections(prev => 
+    setIncludedSections(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     );
   };
@@ -212,11 +206,18 @@ export default function App() {
 
   const generateSpec = async () => {
     if (!idea.trim()) return;
+
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+    if (!apiKey) {
+      setError('Clé API manquante: définissez VITE_OPENROUTER_API_KEY dans votre fichier .env.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     setSpec('');
     setShowHistory(false);
-    
+
     try {
       const requestedSections = SECTIONS
         .filter(s => includedSections.includes(s.id))
@@ -226,41 +227,58 @@ export default function App() {
       const selectedLanguage = LANGUAGES.find(l => l.id === language)?.label || 'Français';
 
       const prompt = `Tu es un expert senior en Product Management, Architecture Logicielle et Génie logiciel.
-Ta mission est de transformer une idée de projet donnée par un utilisateur en document technique complet, structuré et exploitable par une équipe de développement.
-Tu dois penser comme un :
-CTO expérimenté
-Architecte logiciel
-Product Manager SaaS
-Tech Lead startup
+Tu produis un document technique très concret en Markdown.
 
-À partir d'une simple idée utilisateur, tu génères un dossier technique complet pour construire le produit.
+Contraintes de format:
+- Respecte STRICTEMENT et UNIQUEMENT les sections ci-dessous.
+- Utilise des sous-listes actionnables (checklists, bullets, tableaux si pertinent).
+- Donne des hypothèses explicites quand une info manque.
+- N'ajoute pas d'introduction ni de conclusion hors sections.
 
-Tu dois générer la structure suivante (ET UNIQUEMENT CES SECTIONS) formatée strictement en Markdown :
+Sections à générer:
 ${requestedSections}
 
-Règles de rédaction importantes :
-- Langue de réponse : ${selectedLanguage}
-- Sois très structuré et professionnel. 
-- Ne fais jamais de réponses vagues. 
-- Adapte toujours le contenu au type de projet. 
-- Si l'idée est simple, tu dois l'enrichir intelligemment. 
-- Pense toujours "startup réelle".
-- Fournis UNIQUEMENT le texte Markdown, sans blockquote global.
+Règles de rédaction:
+- Langue de réponse: ${selectedLanguage}
+- Ton professionnel, précis, orienté exécution produit/tech.
+- Pas de contenu générique; adapte à l'idée métier.
+- Si pertinent, ajoute des estimations (complexité S/M/L) et priorités (P0/P1/P2).
 
 USER INPUT: "${idea}"`;
 
-      const response = await ai.models.generateContentStream({
-        model: "gemini-3.1-pro-preview",
-        contents: prompt
+      const response = await fetch(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'ArchitectAI'
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: [
+            { role: 'system', content: 'You are a senior CTO and product architect. Output valid Markdown only.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.4
+        })
       });
-      
-      let newSpec = "";
-      for await (const chunk of response) {
-        newSpec += chunk.text || '';
-        setSpec(newSpec);
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`OpenRouter error (${response.status}): ${body}`);
       }
+
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content?.trim();
+
+      if (!content) {
+        throw new Error('Réponse vide du modèle.');
+      }
+
+      setSpec(content);
     } catch (err: any) {
-      console.error("Gemini API Error:", err);
+      console.error('OpenRouter API Error:', err);
       setError(err.message || 'Une erreur est survenue lors de la génération. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
@@ -270,8 +288,6 @@ USER INPUT: "${idea}"`;
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 text-slate-900 font-sans p-4 md:p-8 print:p-0 print:bg-white">
       <div className="max-w-6xl mx-auto space-y-8 print:space-y-0">
-        
-        {/* Header */}
         <Header
           user={user}
           historyCount={history.length}
@@ -282,7 +298,6 @@ USER INPUT: "${idea}"`;
           hasSupabase={!!supabase}
         />
 
-        {/* History Panel */}
         {showHistory && (
           <HistoryPanel
             history={history}
@@ -292,8 +307,6 @@ USER INPUT: "${idea}"`;
         )}
 
         <div className="grid lg:grid-cols-[1fr,340px] gap-8 items-start print:hidden">
-          
-          {/* Main Input Area */}
           <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 space-y-6">
             <IdeaInput
               value={idea}
@@ -326,11 +339,9 @@ USER INPUT: "${idea}"`;
             )}
           </div>
 
-          {/* Sidebar */}
           <Sidebar />
         </div>
 
-        {/* Results Area */}
         <SpecResult
           spec={spec}
           isLoading={isLoading}
@@ -339,7 +350,6 @@ USER INPUT: "${idea}"`;
           onPrint={handlePrintPDF}
           copied={copied}
         />
-        
       </div>
     </div>
   );
