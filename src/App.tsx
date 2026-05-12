@@ -14,12 +14,11 @@ import type { HistoryItem } from './lib/historyTypes';
 import Header from './components/Header';
 import AuthGate from './components/AuthGate';
 import IdeaInput from './components/IdeaInput';
-import OptionsPanel from './components/OptionsPanel';
-import GenerateButton from './components/GenerateButton';
 import HistoryPanel from './components/HistoryPanel';
 import Sidebar from './components/Sidebar';
 import SpecResult from './components/SpecResult';
 import ToastHost, { type ToastVariant } from './components/ToastHost';
+import GeneratorConfigureSection from './components/GeneratorConfigureSection';
 
 const PRESETS = [
   "E-commerce SaaS B2B",
@@ -42,6 +41,7 @@ export default function App() {
   const [language, setLanguage] = useState('fr');
   const [includedSections, setIncludedSections] = useState<string[]>(SECTIONS.filter(s => s.default).map(s => s.id));
   const [showOptions, setShowOptions] = useState(false);
+  const [showGenerationPanel, setShowGenerationPanel] = useState(false);
 
   const [history, setHistory] = useState<HistoryItem[]>(() => readHistoryFromStorage());
   const [showHistory, setShowHistory] = useState(false);
@@ -187,26 +187,37 @@ export default function App() {
       return;
     }
 
-    let cancelled = false;
+    let alive = true;
 
     void (async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
-        if (cancelled) return;
+        if (!alive) return;
         if (error) {
           console.error('getSession:', error);
         }
         const session = data.session;
         setUser(session?.user ?? null);
+        // Débloquer l’UI dès que la session locale est connue — ne pas attendre le cloud
+        setAuthChecked(true);
+
         if (session?.user) {
-          const merged = await hydrateHistoryFromCloud(session.user.id);
-          if (cancelled) return;
-          if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
+          void (async () => {
+            try {
+              const merged = await hydrateHistoryFromCloud(session.user.id);
+              if (!alive) return;
+              if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
+            } catch (e) {
+              console.error('Hydratation cloud au démarrage', e);
+            }
+          })();
         }
       } catch (e) {
         console.error('Session init failed', e);
-      } finally {
-        if (!cancelled) setAuthChecked(true);
+        if (alive) {
+          setUser(null);
+          setAuthChecked(true);
+        }
       }
     })();
 
@@ -221,8 +232,10 @@ export default function App() {
         return;
       }
 
-      // INITIAL_SESSION : l’état initial est déjà appliqué via getSession() ci-dessus.
-      if (event === 'INITIAL_SESSION') return;
+      if (event === 'INITIAL_SESSION') {
+        setAuthChecked(true);
+        return;
+      }
 
       if (event === 'SIGNED_IN' && session?.user) {
         const merged = await hydrateHistoryFromCloud(session.user.id);
@@ -231,7 +244,7 @@ export default function App() {
     });
 
     return () => {
-      cancelled = true;
+      alive = false;
       subscription.unsubscribe();
     };
   }, [hydrateHistoryFromCloud, syncAllHistoryToCloud]);
@@ -346,6 +359,7 @@ export default function App() {
     setIdea(item.idea);
     setSpec(item.spec);
     setShowHistory(false);
+    setShowGenerationPanel(true);
   };
 
   const generateSpec = async () => {
@@ -354,6 +368,7 @@ export default function App() {
     const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
     if (!apiKey) {
       setError('Clé API manquante: définissez VITE_OPENROUTER_API_KEY dans votre fichier .env.');
+      setShowGenerationPanel(true);
       return;
     }
 
@@ -424,6 +439,7 @@ USER INPUT: "${idea}"`;
     } catch (err: any) {
       console.error('OpenRouter API Error:', err);
       setError(err.message || 'Une erreur est survenue lors de la génération. Veuillez réessayer.');
+      setShowGenerationPanel(true);
     } finally {
       setIsLoading(false);
     }
@@ -503,20 +519,20 @@ USER INPUT: "${idea}"`;
         )}
 
         <div className="grid items-start gap-8 lg:grid-cols-[1fr,340px] print:hidden">
-          <div
-            id="generateur"
-            className="scroll-mt-24 space-y-6 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] sm:p-8"
-          >
-            <IdeaInput
-              value={idea}
-              onChange={setIdea}
-              disabled={isLoading}
-              presets={PRESETS}
-            />
+          <div id="generateur" className="scroll-mt-24 space-y-6">
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] sm:p-8">
+              <IdeaInput value={idea} onChange={setIdea} disabled={isLoading} />
+            </div>
 
-            <OptionsPanel
-              isOpen={showOptions}
-              onToggle={() => setShowOptions(!showOptions)}
+            <GeneratorConfigureSection
+              isOpen={showGenerationPanel}
+              onToggle={() => setShowGenerationPanel((o) => !o)}
+              ideaHasContent={idea.trim().length > 0}
+              presets={PRESETS}
+              onApplyPreset={setIdea}
+              disabled={isLoading}
+              optionsOpen={showOptions}
+              onToggleOptions={() => setShowOptions(!showOptions)}
               language={language}
               onLanguageChange={setLanguage}
               languages={LANGUAGES}
@@ -526,19 +542,11 @@ USER INPUT: "${idea}"`;
               modelOptions={modelOptions}
               selectedModel={openRouterModel}
               onModelChange={handleModelChange}
-            />
-
-            <GenerateButton
-              onClick={generateSpec}
-              disabled={!idea.trim() || isLoading || includedSections.length === 0}
+              onGenerate={generateSpec}
+              generateDisabled={!idea.trim() || isLoading || includedSections.length === 0}
               isLoading={isLoading}
+              error={error || null}
             />
-
-            {error && (
-              <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm font-medium">
-                ⚠️ {error}
-              </div>
-            )}
           </div>
 
           <Sidebar />

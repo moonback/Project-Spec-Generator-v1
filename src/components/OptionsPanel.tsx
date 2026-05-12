@@ -6,9 +6,9 @@ interface Language {
 }
 
 interface Section {
-  id: string;
-  label: string;
-  default: boolean;
+  readonly id: string;
+  readonly label: string;
+  readonly default: boolean;
 }
 
 interface OptionsPanelProps {
@@ -19,10 +19,12 @@ interface OptionsPanelProps {
   languages: Language[];
   includedSections: string[];
   onToggleSection: (id: string) => void;
-  sections: Section[];
+  sections: readonly Section[];
   modelOptions: string[];
   selectedModel: string;
   onModelChange: (model: string) => void;
+  /** Sans bordure supérieure (ex. panneau déjà encadré par un parent) */
+  embedded?: boolean;
 }
 
 export default function OptionsPanel({
@@ -36,10 +38,11 @@ export default function OptionsPanel({
   sections,
   modelOptions,
   selectedModel,
-  onModelChange
+  onModelChange,
+  embedded = false
 }: OptionsPanelProps) {
   return (
-    <div className="border-t border-slate-200 pt-6">
+    <div className={embedded ? 'pt-0' : 'border-t border-slate-200 pt-6'}>
       <button
         onClick={onToggle}
         className="flex items-center justify-between w-full text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors group"
