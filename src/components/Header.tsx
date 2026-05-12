@@ -7,7 +7,7 @@ interface HeaderProps {
   historyCount: number;
   onShowHistory: () => void;
   onSignOut: () => void;
-  onSignIn: (email: string) => Promise<void>;
+  onSignIn: (email: string, profileName: string) => Promise<void>;
   isSyncing: boolean;
   hasSupabase: boolean;
 }
