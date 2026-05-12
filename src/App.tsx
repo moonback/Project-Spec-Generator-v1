@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import { buildProjectUpsertRow } from './lib/specSections';
+import { SECTIONS } from './config/sections';
 import Header from './components/Header';
+import AuthGate from './components/AuthGate';
 import IdeaInput from './components/IdeaInput';
 import OptionsPanel from './components/OptionsPanel';
 import GenerateButton from './components/GenerateButton';
@@ -8,7 +11,7 @@ import HistoryPanel from './components/HistoryPanel';
 import Sidebar from './components/Sidebar';
 import SpecResult from './components/SpecResult';
 
-const OPENROUTER_MODEL = 'openai/gpt-oss-120b:free';
+const OPENROUTER_MODEL = 'arcee-ai/trinity-large-thinking:free';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface HistoryItem {
@@ -28,20 +31,6 @@ const LANGUAGES = [
   { id: 'fr', label: 'Français' },
   { id: 'en', label: 'English' },
   { id: 'es', label: 'Español' },
-];
-
-const SECTIONS = [
-  { id: 'summary', default: true, label: 'Résumé du projet' },
-  { id: 'business', default: true, label: 'Objectifs business' },
-  { id: 'mvp', default: true, label: 'MVP (Minimum Viable Product)' },
-  { id: 'stories', default: true, label: 'User Stories' },
-  { id: 'architecture', default: true, label: 'Architecture système' },
-  { id: 'schema', default: true, label: 'Modèle de données' },
-  { id: 'api', default: true, label: 'API Endpoints' },
-  { id: 'ui', default: true, label: 'Pages UI' },
-  { id: 'stack', default: true, label: 'Stack technique recommandée' },
-  { id: 'roadmap', default: true, label: 'Roadmap de développement' },
-  { id: 'risks', default: true, label: 'Risques techniques & Mitigation' },
 ];
 
 export default function App() {
@@ -67,27 +56,34 @@ export default function App() {
 
   const [user, setUser] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          syncAllHistoryToCloud(session.user.id, history);
-          fetchCloudHistory(session.user.id);
-        }
-      });
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          syncAllHistoryToCloud(session.user.id, history);
-          fetchCloudHistory(session.user.id);
-        }
-      });
-
-      return () => subscription.unsubscribe();
+    if (!supabase) {
+      setAuthChecked(true);
+      return;
     }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthChecked(true);
+      if (session?.user) {
+        syncAllHistoryToCloud(session.user.id, history);
+        fetchCloudHistory(session.user.id);
+      }
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        syncAllHistoryToCloud(session.user.id, history);
+        fetchCloudHistory(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchCloudHistory = async (userId: string) => {
@@ -117,13 +113,17 @@ export default function App() {
 
     try {
       setIsSyncing(true);
-      const payload = items.map((item) => ({
-        id: item.id,
-        user_id: userId,
-        idea: item.idea,
-        spec: item.spec,
-        timestamp: new Date(item.timestamp).toISOString()
-      }));
+      const payload = items.map((item) =>
+        buildProjectUpsertRow({
+          id: item.id,
+          userId,
+          idea: item.idea,
+          spec: item.spec,
+          timestamp: item.timestamp,
+          language: 'fr',
+          includedSections: []
+        })
+      );
 
       const { error } = await supabase.from('projects').upsert(payload, { onConflict: 'id' });
       if (error) throw error;
@@ -134,17 +134,24 @@ export default function App() {
     }
   };
 
-  const syncToCloud = async (item: HistoryItem) => {
+  const syncToCloud = async (
+    item: HistoryItem,
+    lang: string,
+    sectionsForRun: string[]
+  ) => {
     if (!supabase || !user) return;
     setIsSyncing(true);
     try {
-      await supabase.from('projects').upsert({
+      const row = buildProjectUpsertRow({
         id: item.id,
-        user_id: user.id,
+        userId: user.id,
         idea: item.idea,
         spec: item.spec,
-        timestamp: new Date(item.timestamp).toISOString()
-      }, { onConflict: 'id' });
+        timestamp: item.timestamp,
+        language: lang,
+        includedSections: sectionsForRun
+      });
+      await supabase.from('projects').upsert(row, { onConflict: 'id' });
     } catch (err) {
       console.error('Failed to sync to cloud', err);
     } finally {
@@ -152,15 +159,45 @@ export default function App() {
     }
   };
 
-  const handleSignIn = async (email: string) => {
-    if (!supabase || !email.trim()) return;
+  const handleSignInPassword = async (email: string, password: string) => {
+    if (!supabase) return { error: 'Supabase non configuré.' };
+    setIsSyncing(true);
     try {
-      setIsSyncing(true);
-      const { error } = await supabase.auth.signInWithOtp({ email });
-      if (error) throw error;
-      alert('Lien de connexion envoyé ! Vérifiez vos emails.');
-    } catch (error: any) {
-      alert(error.message || 'Erreur lors de la connexion');
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      return {};
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignUp = async (email: string, password: string) => {
+    if (!supabase) return { error: 'Supabase non configuré.' };
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}` }
+      });
+      if (error) return { error: error.message };
+      const needsEmailConfirm = Boolean(data.user) && !data.session;
+      return { needsEmailConfirm };
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignInMagicLink = async (email: string) => {
+    if (!supabase || !email.trim()) return { error: 'Email requis.' };
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}` }
+      });
+      if (error) return { error: error.message };
+      return {};
     } finally {
       setIsSyncing(false);
     }
@@ -187,12 +224,12 @@ export default function App() {
         const newHistory = [newItem, ...prev].slice(0, 10);
         localStorage.setItem('architect-ai-history', JSON.stringify(newHistory));
         if (user) {
-          syncToCloud(newItem);
+          syncToCloud(newItem, language, includedSections);
         }
         return newHistory;
       });
     }
-  }, [isLoading, spec, idea, user]);
+  }, [isLoading, spec, idea, user, language, includedSections]);
 
   const toggleSection = (id: string) => {
     setIncludedSections(prev =>
@@ -233,7 +270,7 @@ export default function App() {
   };
 
   const generateSpec = async () => {
-    if (!idea.trim()) return;
+    if (!idea.trim() || !user) return;
 
     const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -313,6 +350,42 @@ USER INPUT: "${idea}"`;
     }
   };
 
+  if (!supabase) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-xl font-bold mb-3">Configuration requise</h1>
+        <p className="text-slate-400 max-w-md text-sm leading-relaxed">
+          Définissez <code className="text-amber-200">VITE_SUPABASE_URL</code> et{' '}
+          <code className="text-amber-200">VITE_SUPABASE_ANON_KEY</code> dans votre fichier{' '}
+          <code className="text-amber-200">.env</code>, puis activez le fournisseur Email (mot de passe) dans le
+          tableau Supabase — Authentication → Providers → Email.
+        </p>
+      </div>
+    );
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3 text-slate-600">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-medium">Vérification de la session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AuthGate
+        onSignInPassword={handleSignInPassword}
+        onSignUp={handleSignUp}
+        onSignInMagicLink={handleSignInMagicLink}
+        isBusy={isSyncing}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 text-slate-900 font-sans p-4 md:p-8 print:p-0 print:bg-white">
       <div className="max-w-6xl mx-auto space-y-8 print:space-y-0">
@@ -321,9 +394,7 @@ USER INPUT: "${idea}"`;
           historyCount={history.length}
           onShowHistory={() => setShowHistory(!showHistory)}
           onSignOut={handleSignOut}
-          onSignIn={handleSignIn}
-          isSyncing={isSyncing}
-          hasSupabase={!!supabase}
+          hasCloudSync
         />
 
         {showHistory && (
