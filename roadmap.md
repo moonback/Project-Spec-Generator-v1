@@ -11,10 +11,10 @@ Ce document reflète l’état réel de l’application (`src/App.tsx`, auth, Su
 | Domaine | Implémenté |
 |--------|-------------|
 | **Stack** | React + TypeScript + Vite, Tailwind, `react-markdown` + remark-gfm |
-| **IA** | OpenRouter (Chat Completions), modèle défini en constante dans `App.tsx` |
+| **IA** | OpenRouter : modèle choisi dans **Options avancées** + `VITE_OPENROUTER_MODEL(S)` (`config/openrouter.ts`) |
 | **Génération** | Prompt multi-sections strict, langue FR/EN/ES, options de sections dans `config/sections.ts` |
 | **Export** | Copie, Markdown, impression navigateur (PDF) |
-| **Historique** | `localStorage` + chargement / upsert Supabase à la connexion |
+| **Historique** | `localStorage` + **fusion** avec le cloud au login (`historyMerge.ts` / `historyStorage.ts`) puis upsert groupé |
 | **Auth** | Supabase **obligatoire** : sans `VITE_SUPABASE_*`, écran de configuration. Sinon `AuthGate` : connexion mot de passe, inscription, lien magique (OTP) |
 | **Données** | Table `projects` (spec + colonnes `section_*`, `language`, `included_sections`) via `buildProjectUpsertRow` + parsing Markdown `##` (`specSections.ts`). Schéma SQL + RLS dans `supabase/migrations/` |
 | **Profils** | Table `profiles` + trigger à l’inscription (côté SQL) — **pas d’écran profil** dans l’app |
@@ -36,13 +36,13 @@ Ce document reflète l’état réel de l’application (`src/App.tsx`, auth, Su
 - [x] Envoi des champs structurés (`section_*`, langue, sections incluses) lors de l’upsert
 - [x] Auth obligatoire si Supabase configuré (pas d’usage anonyme du générateur)
 - [x] Connexion email + mot de passe, inscription, lien magique
-- [ ] **Indicateur / toasts** d’erreur ou de succès pour sync cloud (aujourd’hui `console.error` seulement)
-- [ ] **Stratégie fusion** local ↔ cloud documentée (au login, `fetchCloudHistory` remplace l’historique en mémoire : risque d’écraser le local non synchronisé)
-- [ ] **Sélection du modèle** dans l’UI ou via `.env` documenté (au lieu d’une seule constante dans le code)
+- [x] **Toasts** d’erreur / succès pour la sauvegarde cloud + indicateur de sync dans l’en-tête
+- [x] **Fusion local ↔ cloud** à la connexion (`mergeHistoryById` : union par `id`, timestamp le plus récent gagne ; persistance `localStorage` alignée)
+- [x] **Modèle OpenRouter** : liste via `VITE_OPENROUTER_MODELS` ou `VITE_OPENROUTER_MODEL`, sélecteur dans les options, préférence mémorisée (`localStorage`)
 
 ## Phase 3 — Espace projets & qualité document
 
-- [ ] **Liste « Mes projets »** : titres, dates, recherche — au-delà du panneau historique limité (10 entrées côté client après génération)
+- [ ] **Liste « Mes projets »** : titres, dates, recherche — au-delà du panneau historique (jusqu’à 50 entrées fusionnées local + cloud)
 - [ ] **CRUD** : renommer idée / titre, supprimer un projet (Supabase + UI)
 - [ ] **Écran profil** : lecture / mise à jour `profiles` (nom affiché, avatar)
 - [ ] **Mot de passe oublié** : flux `resetPasswordForEmail` + page de redirection Supabase

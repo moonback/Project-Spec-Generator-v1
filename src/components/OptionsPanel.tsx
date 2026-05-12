@@ -1,4 +1,4 @@
-import { Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, ChevronDown, ChevronUp, Cpu } from 'lucide-react';
 
 interface Language {
   id: string;
@@ -20,6 +20,9 @@ interface OptionsPanelProps {
   includedSections: string[];
   onToggleSection: (id: string) => void;
   sections: Section[];
+  modelOptions: string[];
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }
 
 export default function OptionsPanel({
@@ -30,7 +33,10 @@ export default function OptionsPanel({
   languages,
   includedSections,
   onToggleSection,
-  sections
+  sections,
+  modelOptions,
+  selectedModel,
+  onModelChange
 }: OptionsPanelProps) {
   return (
     <div className="border-t border-slate-200 pt-6">
@@ -51,6 +57,28 @@ export default function OptionsPanel({
 
       {isOpen && (
         <div className="space-y-6 pt-6 animate-in slide-in-from-top-2 duration-300">
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-600">
+              <Cpu className="w-4 h-4 text-slate-500" />
+              Modèle OpenRouter
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => onModelChange(e.target.value)}
+              className="w-full text-sm px-3 py-2.5 rounded-lg border-2 border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {modelOptions.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Liste : variable <code className="text-slate-700">VITE_OPENROUTER_MODELS</code> (modèles séparés par
+              des virgules), ou un seul <code className="text-slate-700">VITE_OPENROUTER_MODEL</code>.
+            </p>
+          </div>
+
           {/* Language Selection */}
           <div className="space-y-3">
             <label className="block text-xs font-bold uppercase tracking-wide text-slate-600">

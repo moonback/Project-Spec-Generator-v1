@@ -1,4 +1,4 @@
-import { Sparkles, Cloud, History } from 'lucide-react';
+import { Sparkles, Cloud, History, Loader2 } from 'lucide-react';
 
 interface HeaderProps {
   user: any;
@@ -6,6 +6,7 @@ interface HeaderProps {
   onShowHistory: () => void;
   onSignOut: () => void;
   hasCloudSync: boolean;
+  isSyncing?: boolean;
 }
 
 export default function Header({
@@ -13,7 +14,8 @@ export default function Header({
   historyCount,
   onShowHistory,
   onSignOut,
-  hasCloudSync
+  hasCloudSync,
+  isSyncing = false
 }: HeaderProps) {
   return (
     <header className="space-y-4 pt-8 pb-6 border-b border-slate-200 print:hidden">
@@ -26,7 +28,11 @@ export default function Header({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2">
-              <Cloud className="w-4 h-4 text-emerald-500" />
+              {isSyncing ? (
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" aria-label="Synchronisation" />
+              ) : (
+                <Cloud className="w-4 h-4 text-emerald-500" />
+              )}
               <span className="text-sm font-medium text-slate-700 hidden sm:inline" title={user.email}>
                 {user.email?.split('@')[0]}
               </span>

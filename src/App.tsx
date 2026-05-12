@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import { buildProjectUpsertRow } from './lib/specSections';
 import { SECTIONS } from './config/sections';
+import {
+  OPENROUTER_URL,
+  getOpenRouterModelOptions,
+  resolveInitialModelChoice,
+  persistSelectedModel
+} from './config/openrouter';
+import { mergeHistoryById } from './lib/historyMerge';
+import { readHistoryFromStorage, writeHistoryToStorage } from './lib/historyStorage';
+import type { HistoryItem } from './lib/historyTypes';
 import Header from './components/Header';
 import AuthGate from './components/AuthGate';
 import IdeaInput from './components/IdeaInput';
@@ -10,16 +19,7 @@ import GenerateButton from './components/GenerateButton';
 import HistoryPanel from './components/HistoryPanel';
 import Sidebar from './components/Sidebar';
 import SpecResult from './components/SpecResult';
-
-const OPENROUTER_MODEL = 'arcee-ai/trinity-large-thinking:free';
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-interface HistoryItem {
-  id: string;
-  idea: string;
-  spec: string;
-  timestamp: number;
-}
+import ToastHost, { type ToastVariant } from './components/ToastHost';
 
 const PRESETS = [
   "E-commerce SaaS B2B",
@@ -43,14 +43,7 @@ export default function App() {
   const [includedSections, setIncludedSections] = useState<string[]>(SECTIONS.filter(s => s.default).map(s => s.id));
   const [showOptions, setShowOptions] = useState(false);
 
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('architect-ai-history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [history, setHistory] = useState<HistoryItem[]>(() => readHistoryFromStorage());
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -58,106 +51,168 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
+  const modelOptions = useMemo(() => getOpenRouterModelOptions(), []);
+  const [openRouterModel, setOpenRouterModel] = useState(() => resolveInitialModelChoice(modelOptions));
+
+  const [toasts, setToasts] = useState<{ id: string; message: string; variant: ToastVariant }[]>([]);
+
+  const pushToast = useCallback((message: string, variant: ToastVariant) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, message, variant }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, variant === 'error' ? 8000 : 4500);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (!modelOptions.includes(openRouterModel) && modelOptions[0]) {
+      setOpenRouterModel(modelOptions[0]);
+    }
+  }, [modelOptions, openRouterModel]);
+
+  const handleModelChange = (model: string) => {
+    setOpenRouterModel(model);
+    persistSelectedModel(model);
+  };
+
+  const hydrateHistoryFromCloud = useCallback(
+    async (userId: string): Promise<HistoryItem[]> => {
+      const local = readHistoryFromStorage();
+      if (!supabase) return local;
+
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', userId)
+          .order('timestamp', { ascending: false });
+
+        if (error) throw error;
+
+        const cloud: HistoryItem[] = (data ?? []).map((d) => ({
+          id: d.id,
+          idea: d.idea,
+          spec: d.spec,
+          timestamp: new Date(d.timestamp).getTime()
+        }));
+
+        const merged = mergeHistoryById(cloud, local);
+        setHistory(merged);
+        writeHistoryToStorage(merged);
+        return merged;
+      } catch (err: unknown) {
+        console.error('Failed to fetch / merge cloud history', err);
+        const msg = err instanceof Error ? err.message : 'Impossible de charger le cloud.';
+        pushToast(msg, 'error');
+        setHistory(local);
+        writeHistoryToStorage(local);
+        return local;
+      }
+    },
+    [pushToast]
+  );
+
+  const syncAllHistoryToCloud = useCallback(
+    async (userId: string, items: HistoryItem[]) => {
+      if (!supabase || !items.length) return;
+
+      try {
+        setIsSyncing(true);
+        const payload = items.map((item) =>
+          buildProjectUpsertRow({
+            id: item.id,
+            userId,
+            idea: item.idea,
+            spec: item.spec,
+            timestamp: item.timestamp,
+            language: 'fr',
+            includedSections: []
+          })
+        );
+
+        const { error } = await supabase.from('projects').upsert(payload, { onConflict: 'id' });
+        if (error) {
+          pushToast(`Synchronisation : ${error.message}`, 'error');
+          return;
+        }
+      } catch (err: unknown) {
+        console.error('Failed to sync all history to cloud', err);
+        const msg = err instanceof Error ? err.message : 'Échec de la synchronisation.';
+        pushToast(msg, 'error');
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [pushToast]
+  );
+
+  const syncToCloud = useCallback(
+    async (item: HistoryItem, lang: string, sectionsForRun: string[], uid: string) => {
+      if (!supabase) return;
+      setIsSyncing(true);
+      try {
+        const row = buildProjectUpsertRow({
+          id: item.id,
+          userId: uid,
+          idea: item.idea,
+          spec: item.spec,
+          timestamp: item.timestamp,
+          language: lang,
+          includedSections: sectionsForRun
+        });
+        const { error } = await supabase.from('projects').upsert(row, { onConflict: 'id' });
+        if (error) {
+          pushToast(`Sauvegarde cloud : ${error.message}`, 'error');
+          return;
+        }
+        pushToast('Spec enregistrée dans le cloud.', 'success');
+      } catch (err: unknown) {
+        console.error('Failed to sync to cloud', err);
+        const msg = err instanceof Error ? err.message : 'Sauvegarde cloud impossible.';
+        pushToast(msg, 'error');
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [pushToast]
+  );
+
   useEffect(() => {
     if (!supabase) {
       setAuthChecked(true);
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setAuthChecked(true);
-      if (session?.user) {
-        syncAllHistoryToCloud(session.user.id, history);
-        fetchCloudHistory(session.user.id);
-      }
-    });
-
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
-        syncAllHistoryToCloud(session.user.id, history);
-        fetchCloudHistory(session.user.id);
+
+      if (event === 'SIGNED_OUT') {
+        setHistory([]);
+        writeHistoryToStorage([]);
+      }
+
+      if (event === 'INITIAL_SESSION') {
+        setAuthChecked(true);
+        if (session?.user) {
+          const merged = await hydrateHistoryFromCloud(session.user.id);
+          if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
+        }
+      }
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        const merged = await hydrateHistoryFromCloud(session.user.id);
+        if (merged.length) await syncAllHistoryToCloud(session.user.id, merged);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchCloudHistory = async (userId: string) => {
-    if (!supabase) return;
-    try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false });
-
-      if (!error && data) {
-        setHistory(data.map(d => ({
-          id: d.id,
-          idea: d.idea,
-          spec: d.spec,
-          timestamp: new Date(d.timestamp).getTime()
-        })));
-      }
-    } catch (err) {
-      console.error('Failed to fetch cloud history', err);
-    }
-  };
-
-  const syncAllHistoryToCloud = async (userId: string, items: HistoryItem[]) => {
-    if (!supabase || !items.length) return;
-
-    try {
-      setIsSyncing(true);
-      const payload = items.map((item) =>
-        buildProjectUpsertRow({
-          id: item.id,
-          userId,
-          idea: item.idea,
-          spec: item.spec,
-          timestamp: item.timestamp,
-          language: 'fr',
-          includedSections: []
-        })
-      );
-
-      const { error } = await supabase.from('projects').upsert(payload, { onConflict: 'id' });
-      if (error) throw error;
-    } catch (err) {
-      console.error('Failed to sync all history to cloud', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const syncToCloud = async (
-    item: HistoryItem,
-    lang: string,
-    sectionsForRun: string[]
-  ) => {
-    if (!supabase || !user) return;
-    setIsSyncing(true);
-    try {
-      const row = buildProjectUpsertRow({
-        id: item.id,
-        userId: user.id,
-        idea: item.idea,
-        spec: item.spec,
-        timestamp: item.timestamp,
-        language: lang,
-        includedSections: sectionsForRun
-      });
-      await supabase.from('projects').upsert(row, { onConflict: 'id' });
-    } catch (err) {
-      console.error('Failed to sync to cloud', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  }, [hydrateHistoryFromCloud, syncAllHistoryToCloud]);
 
   const handleSignInPassword = async (email: string, password: string) => {
     if (!supabase) return { error: 'Supabase non configuré.' };
@@ -204,6 +259,8 @@ export default function App() {
   };
 
   const handleSignOut = () => {
+    setHistory([]);
+    writeHistoryToStorage([]);
     if (supabase) {
       supabase.auth.signOut();
     }
@@ -221,15 +278,15 @@ export default function App() {
           spec,
           timestamp: Date.now()
         };
-        const newHistory = [newItem, ...prev].slice(0, 10);
+        const newHistory = [newItem, ...prev].slice(0, 50);
         localStorage.setItem('architect-ai-history', JSON.stringify(newHistory));
         if (user) {
-          syncToCloud(newItem, language, includedSections);
+          syncToCloud(newItem, language, includedSections, user.id);
         }
         return newHistory;
       });
     }
-  }, [isLoading, spec, idea, user, language, includedSections]);
+  }, [isLoading, spec, idea, user, language, includedSections, syncToCloud]);
 
   const toggleSection = (id: string) => {
     setIncludedSections(prev =>
@@ -320,7 +377,7 @@ USER INPUT: "${idea}"`;
           'X-Title': 'ArchitectAI'
         },
         body: JSON.stringify({
-          model: OPENROUTER_MODEL,
+          model: openRouterModel,
           messages: [
             { role: 'system', content: 'You are a senior CTO and product architect. Output valid Markdown only.' },
             { role: 'user', content: prompt }
@@ -395,6 +452,7 @@ USER INPUT: "${idea}"`;
           onShowHistory={() => setShowHistory(!showHistory)}
           onSignOut={handleSignOut}
           hasCloudSync
+          isSyncing={isSyncing}
         />
 
         {showHistory && (
@@ -423,6 +481,9 @@ USER INPUT: "${idea}"`;
               includedSections={includedSections}
               onToggleSection={toggleSection}
               sections={SECTIONS}
+              modelOptions={modelOptions}
+              selectedModel={openRouterModel}
+              onModelChange={handleModelChange}
             />
 
             <GenerateButton
@@ -449,6 +510,8 @@ USER INPUT: "${idea}"`;
           onPrint={handlePrintPDF}
           copied={copied}
         />
+
+        <ToastHost toasts={toasts} onDismiss={dismissToast} />
       </div>
     </div>
   );
