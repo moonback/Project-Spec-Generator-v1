@@ -1,0 +1,6 @@
+{
+  "name": "Remix: Project Spec Generator",
+  "description": "Transforms a project idea into a complete, structured technical specification using Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
