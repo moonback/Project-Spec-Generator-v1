@@ -72,12 +72,18 @@ export default function App() {
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         setUser(session?.user ?? null);
-        if (session?.user) fetchCloudHistory(session.user.id);
+        if (session?.user) {
+          syncAllHistoryToCloud(session.user.id, history);
+          fetchCloudHistory(session.user.id);
+        }
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
-        if (session?.user) fetchCloudHistory(session.user.id);
+        if (session?.user) {
+          syncAllHistoryToCloud(session.user.id, history);
+          fetchCloudHistory(session.user.id);
+        }
       });
 
       return () => subscription.unsubscribe();
@@ -103,6 +109,28 @@ export default function App() {
       }
     } catch (err) {
       console.error('Failed to fetch cloud history', err);
+    }
+  };
+
+  const syncAllHistoryToCloud = async (userId: string, items: HistoryItem[]) => {
+    if (!supabase || !items.length) return;
+
+    try {
+      setIsSyncing(true);
+      const payload = items.map((item) => ({
+        id: item.id,
+        user_id: userId,
+        idea: item.idea,
+        spec: item.spec,
+        timestamp: new Date(item.timestamp).toISOString()
+      }));
+
+      const { error } = await supabase.from('projects').upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to sync all history to cloud', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
