@@ -32,8 +32,8 @@ export default function AuthModal({ onClose, onSignIn, isSyncing }: AuthModalPro
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Connexion Cloud</h3>
-              <p className="text-sm text-slate-500">Synchronisez vos projets</p>
+              <h3 className="text-lg font-bold text-slate-900">Inscription & Connexion Cloud</h3>
+              <p className="text-sm text-slate-500">Créez votre compte et synchronisez vos projets</p>
             </div>
           </div>
 

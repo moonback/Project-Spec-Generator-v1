@@ -1,4 +1,4 @@
-import { Sparkles, Cloud, History } from 'lucide-react';
+import { Sparkles, Cloud, History, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import AuthModal from './AuthModal';
 
@@ -52,12 +52,12 @@ export default function Header({
                   </button>
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={() => setShowAuth(true)}
                   className="flex items-center gap-2 bg-white text-slate-700 hover:text-slate-900 px-4 py-2 border border-slate-200 rounded-lg shadow-sm transition-all hover:shadow-md"
                 >
-                  <Cloud className="w-4 h-4" />
-                  <span className="text-sm font-medium">Cloud Save</span>
+                  <UserPlus className="w-4 h-4" />
+                  <span className="text-sm font-medium">Inscription / Connexion</span>
                 </button>
               )}
             </>
